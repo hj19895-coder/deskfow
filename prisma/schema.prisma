@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER + ROLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  isSystem    Boolean          @default(false)  // SUPER_ADMIN can't be deleted
+
+  users       User[]
+  permissions RolePermission[]
+
+  createdAt   DateTime         @default(now())
+}
+
+model RolePermission {
+  id       String  @id @default(uuid())
+  roleId   String
+  page     String  // e.g. "dashboard", "tickets", "users", "master-data", "reports"
+  canView  Boolean @default(false)
+  canCreate Boolean @default(false)
+  canEdit  Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  role     Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, page])
+}
+
+model User {
+  id       String @id @default(uuid())
+  name     String
+  email    String @unique
+  password String
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  ticketsCreated   Ticket[]              @relation("CreatedTickets")
+  ticketsAssigned  Ticket[]              @relation("AssignedTickets")
+  TicketHistory    TicketHistory[]
+  tablePreferences UserTablePreference[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MASTER DATA  (single reusable lookup table for all dropdowns)
+//
+// type examples: STATUS | SOURCE | LEVEL | GROUP | SITE | TICKET_TYPE |
+//                CLIENT_NAME | PRIORITY | CATEGORY | SUBCATEGORY |
+//                ITEM | ROOT_CAUSE_CATEGORY | SEVERITY | RAISED_BY
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MasterData {
+  id       String  @id @default(uuid())
+  type     String // e.g. "STATUS", "PRIORITY"
+  value    String // display label, e.g. "Open", "High"
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  // Back-relations — one per FK on Ticket
+  ticketsByStatus      Ticket[] @relation("TicketStatus")
+  ticketsBySource      Ticket[] @relation("TicketSource")
+  ticketsByLevel       Ticket[] @relation("TicketLevel")
+  ticketsByGroup       Ticket[] @relation("TicketGroup")
+  ticketsBySeverity    Ticket[] @relation("TicketSeverity")
+  ticketsByRaisedBy    Ticket[] @relation("TicketRaisedBy")
+  ticketsBySite        Ticket[] @relation("TicketSite")
+  ticketsByTicketType  Ticket[] @relation("TicketTicketType")
+  ticketsByClientName  Ticket[] @relation("TicketClientName")
+  ticketsByPriority    Ticket[] @relation("TicketPriority")
+  ticketsByCategory    Ticket[] @relation("TicketCategory")
+  ticketsBySubcategory Ticket[] @relation("TicketSubcategory")
+  ticketsByItem        Ticket[] @relation("TicketItem")
+  ticketsByRootCause   Ticket[] @relation("TicketRootCause")
+
+  @@unique([type, value]) // no duplicate values within the same type
+  @@index([type, isActive])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TICKET HISTORY (audit trail)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TicketHistory {
+  id        String   @id @default(uuid())
+  ticketId  String
+  userId    String
+  field     String // e.g. "statusId", "priorityId", "remarks"
+  oldValue  String?
+  newValue  String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TICKET
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserTablePreference {
+  id      String @id @default(uuid())
+  userId  String
+  pageKey String
+
+  visibleColumns Json
+  columnWidths   Json
+  columnOrder    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pageKey])
+  @@index([pageKey])
+}
+
+model Ticket {
+  id           String  @id @default(uuid())
+  ticketNumber Int     @unique @default(autoincrement())
+  subject      String
+  description  String
+  remarks      String?
+  reopened     Boolean @default(false)
+
+  // Requester info
+  requesterName String
+
+  // Dates
+  tat             DateTime?
+  assignedOn      DateTime?
+  estimatedTatHrs Float?
+
+  // Foreign keys — users
+  createdById  String
+  assignedToId String?
+  createdBy    User    @relation("CreatedTickets", fields: [createdById], references: [id])
+  assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])
+
+  // Foreign keys — MasterData lookups (all optional except status & priority)
+  statusId             String
+  sourceId             String?
+  levelId              String?
+  groupId              String?
+  severityId           String?
+  raisedById           String?
+  siteId               String?
+  ticketTypeId         String?
+  clientNameId         String?
+  priorityId           String
+  categoryId           String?
+  subcategoryId        String?
+  itemId               String?
+  rootCauseCategoryId  String?
+  seatEffectedId       String?
+  clientConfirmationId String?
+  departmentId         String?
+  dueDate              DateTime?
+  resolvedDate         DateTime?
+  completedDate        DateTime?
+  responseDueByTime    DateTime?
+
+  status            MasterData  @relation("TicketStatus", fields: [statusId], references: [id])
+  source            MasterData? @relation("TicketSource", fields: [sourceId], references: [id])
+  level             MasterData? @relation("TicketLevel", fields: [levelId], references: [id])
+  group             MasterData? @relation("TicketGroup", fields: [groupId], references: [id])
+  severity          MasterData? @relation("TicketSeverity", fields: [severityId], references: [id])
+  raisedBy          MasterData? @relation("TicketRaisedBy", fields: [raisedById], references: [id])
+  site              MasterData? @relation("TicketSite", fields: [siteId], references: [id])
+  ticketType        MasterData? @relation("TicketTicketType", fields: [ticketTypeId], references: [id])
+  clientName        MasterData? @relation("TicketClientName", fields: [clientNameId], references: [id])
+  priority          MasterData  @relation("TicketPriority", fields: [priorityId], references: [id])
+  category          MasterData? @relation("TicketCategory", fields: [categoryId], references: [id])
+  subcategory       MasterData? @relation("TicketSubcategory", fields: [subcategoryId], references: [id])
+  item              MasterData? @relation("TicketItem", fields: [itemId], references: [id])
+  rootCauseCategory MasterData? @relation("TicketRootCause", fields: [rootCauseCategoryId], references: [id])
+
+  history TicketHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isMerged  Boolean  @default(false)
+
+  mergedIntoId String?
+
+  mergedInto Ticket? @relation("TicketMerge", fields: [mergedIntoId], references: [id])
+
+  mergedTickets Ticket[] @relation("TicketMerge")
+}
