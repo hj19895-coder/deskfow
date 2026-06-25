@@ -90,7 +90,6 @@ app.use(morgan('combined', {
 }));
  
 // ── Serve frontend ────────────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, '../../frontend')));
  
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use('/api/tickets',          ticketRoutes);
@@ -112,11 +111,12 @@ app.get('/health', async (req, res) => {
   }
 });
  
-// ── SPA fallback ──────────────────────────────────────────────────────────────
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/index.html'));
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: "DeskFlow API running"
+  });
 });
- 
 // ── Error handlers ────────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
