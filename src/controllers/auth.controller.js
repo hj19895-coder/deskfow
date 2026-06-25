@@ -32,64 +32,52 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
+
     const { email, password } = req.body;
 
+
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { 
+        email: email 
+      },
       include: {
         role: {
-          include: { permissions: true },
-        },
-      },
+          include: {
+            permissions: true
+          }
+        }
+      }
     });
 
 
-    // check user first
     if (!user) {
       return res.status(400).json({
-        message: "Invalid credentials"
+        step: "USER_LOOKUP_FAILED",
+        receivedEmail: email
       });
     }
 
 
-    console.log(
-      "LOGIN USER ROLE:",
-      JSON.stringify(user.role, null, 2)
+    const passwordCheck = await bcrypt.compare(
+      password,
+      user.password
     );
+
+
+    if (!passwordCheck) {
+      return res.status(400).json({
+        step: "PASSWORD_FAILED",
+        enteredPassword: password,
+        dbPasswordLength: user.password.length,
+        dbPasswordStart: user.password.substring(0, 10)
+      });
+    }
 
 
     if (!user.role) {
       return res.status(400).json({
-        message: "User role not assigned"
-      });
-    }
-
-
-    console.log("LOGIN EMAIL:", email);
-
-    console.log("DB USER FOUND:", {
-      id: user.id,
-      email: user.email,
-      passwordFromDB: user.password
-    });
-    
-    console.log("PASSWORD ENTERED:", password);
-    
-    const isMatch = await bcrypt.compare(
-      password,
-      user.password
-    );
-    
-    console.log("PASSWORD MATCH:", isMatch);
-    
-    
-    if (!isMatch) {
-      return res.status(400).json({
-        message: "Invalid password",
-        debug: {
-          entered: password,
-          dbHashStart: user.password.substring(0,10)
-        }
+        step: "ROLE_FAILED",
+        roleId: user.roleId
       });
     }
 
@@ -106,29 +94,24 @@ export const login = async (req, res) => {
     );
 
 
-    res.json({
+    return res.json({
+      success:true,
       token,
-
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-
-        role: user.role.name,
-        roleId: user.role.id,
-
-        permissions:
-          user.role.permissions ?? []
+      user:{
+        id:user.id,
+        email:user.email,
+        name:user.name,
+        role:user.role.name
       }
     });
 
 
-  } catch (err) {
+  } catch(error){
 
-    console.error("LOGIN ERROR:", err);
-
-    res.status(500).json({
-      message: "Login failed"
+    return res.status(500).json({
+      step:"SERVER_ERROR",
+      error:error.message
     });
+
   }
 };
