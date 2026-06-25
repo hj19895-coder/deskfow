@@ -65,15 +65,31 @@ export const login = async (req, res) => {
     }
 
 
+    console.log("LOGIN EMAIL:", email);
+
+    console.log("DB USER FOUND:", {
+      id: user.id,
+      email: user.email,
+      passwordFromDB: user.password
+    });
+    
+    console.log("PASSWORD ENTERED:", password);
+    
     const isMatch = await bcrypt.compare(
       password,
       user.password
     );
-
-
+    
+    console.log("PASSWORD MATCH:", isMatch);
+    
+    
     if (!isMatch) {
       return res.status(400).json({
-        message: "Invalid credentials"
+        message: "Invalid password",
+        debug: {
+          entered: password,
+          dbHashStart: user.password.substring(0,10)
+        }
       });
     }
 
