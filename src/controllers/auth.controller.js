@@ -33,6 +33,7 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -41,32 +42,77 @@ export const login = async (req, res) => {
         },
       },
     });
-    console.log("LOGIN USER ROLE:", JSON.stringify(user.role, null, 2));
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign(
-      { userId: user.id, role: user.role.name },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+    // check user first
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
+    }
+
+
+    console.log(
+      "LOGIN USER ROLE:",
+      JSON.stringify(user.role, null, 2)
     );
 
-    // Return token + safe user data for the frontend
+
+    if (!user.role) {
+      return res.status(400).json({
+        message: "User role not assigned"
+      });
+    }
+
+
+    const isMatch = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Invalid credentials"
+      });
+    }
+
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        role: user.role.name
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "7d"
+      }
+    );
+
+
     res.json({
       token,
+
       user: {
-        id:          user.id,
-        name:        user.name,
-        email:       user.email,
-        role:        user.role.name,
-        roleId:      user.role.id,
-        permissions: user.role.permissions ?? [],
-      },
+        id: user.id,
+        name: user.name,
+        email: user.email,
+
+        role: user.role.name,
+        roleId: user.role.id,
+
+        permissions:
+          user.role.permissions ?? []
+      }
     });
+
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Login failed" });
+
+    console.error("LOGIN ERROR:", err);
+
+    res.status(500).json({
+      message: "Login failed"
+    });
   }
 };
