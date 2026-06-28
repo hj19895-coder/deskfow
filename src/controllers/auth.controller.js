@@ -32,86 +32,41 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-
     const { email, password } = req.body;
-
-
     const user = await prisma.user.findUnique({
-      where: { 
-        email: email 
-      },
+      where: { email },
       include: {
         role: {
-          include: {
-            permissions: true
-          }
-        }
-      }
+          include: { permissions: true },
+        },
+      },
     });
+    console.log("LOGIN USER ROLE:", JSON.stringify(user.role, null, 2));
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
-
-    if (!user) {
-      return res.status(400).json({
-        step: "USER_LOOKUP_FAILED",
-        receivedEmail: email
-      });
-    }
-
-
-    const passwordCheck = await bcrypt.compare(
-      password,
-      user.password
-    );
-
-
-    if (!passwordCheck) {
-      return res.status(400).json({
-        step: "PASSWORD_FAILED",
-        enteredPassword: password,
-        dbPasswordLength: user.password.length,
-        dbPasswordStart: user.password.substring(0, 10)
-      });
-    }
-
-
-    if (!user.role) {
-      return res.status(400).json({
-        step: "ROLE_FAILED",
-        roleId: user.roleId
-      });
-    }
-
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
     const token = jwt.sign(
-      {
-        userId: user.id,
-        role: user.role.name
-      },
+      { userId: user.id, role: user.role.name },
       process.env.JWT_SECRET,
-      {
-        expiresIn: "7d"
-      }
+      { expiresIn: "7d" }
     );
 
-
-    return res.json({
-      success:true,
+    // Return token + safe user data for the frontend
+    res.json({
       token,
-      user:{
-        id:user.id,
-        email:user.email,
-        name:user.name,
-        role:user.role.name
-      }
+      user: {
+        id:          user.id,
+        name:        user.name,
+        email:       user.email,
+        role:        user.role.name,
+        roleId:      user.role.id,
+        permissions: user.role.permissions ?? [],
+      },
     });
-
-
-  } catch(error){
-
-    return res.status(500).json({
-      step:"SERVER_ERROR",
-      error:error.message
-    });
-
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Login failed" });
   }
 };

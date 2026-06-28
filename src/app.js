@@ -30,33 +30,6 @@ const prisma = new PrismaClient();
 const app = express();
 const BASE_PORT        = parseInt(process.env.PORT, 10) || 3000;
 const MAX_PORT_ATTEMPTS = 10;
-
-app.get("/debug/users", async (req,res)=>{
-
-  try {
-
-    const users = await prisma.user.findMany({
-      select:{
-        id:true,
-        email:true
-      }
-    });
-
-    res.json({
-      database: process.env.DATABASE_URL,
-      count: users.length,
-      users
-    });
-
-  } catch(err){
-
-    res.status(500).json({
-      error:err.message
-    });
-
-  }
-
-});
  
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(

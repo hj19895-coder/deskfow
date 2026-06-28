@@ -52,6 +52,7 @@ model User {
   ticketsAssigned  Ticket[]              @relation("AssignedTickets")
   TicketHistory    TicketHistory[]
   tablePreferences UserTablePreference[]
+  notifications    Notification[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,4 +204,25 @@ model Ticket {
   mergedInto Ticket? @relation("TicketMerge", fields: [mergedIntoId], references: [id])
 
   mergedTickets Ticket[] @relation("TicketMerge")
+  notifications    Notification[]
 }
+
+
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   // recipient
+  type      String   // TICKET_CREATED | TICKET_ASSIGNED | STATUS_CHANGED | SLA_BREACH | TICKET_MERGED
+  title     String
+  message   String
+  ticketId  String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
